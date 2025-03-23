@@ -10,4 +10,12 @@
 
   In simple words it use node tree to loop to update position and child transform.
 
-  With the help of the AI model. Grok 3. As long you type  raylib c transform hierarchy and feed the cheat sheet. It should able to make tree node logic as transform hierarchy.
+  With the help of the AI model. Grok 3. As long you type raylib c transform hierarchy and feed the cheat sheet. It should able to make tree node logic as transform hierarchy.
+  
+ 
+# Test:
+ * raylib c transform hierarchy 3d (worked)
+ * raylib c transform hierarchy 2d (worked)
+ * raylib flecs c transform hierarchy 2d (worked)
+ * raylib flecs c transform hierarchy 3d (N/A)
+ 

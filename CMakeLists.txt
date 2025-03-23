@@ -48,15 +48,15 @@ CPMAddPackage(
 #     DOWNLOAD_ONLY YES
 # )
 
-# # flecs
-# CPMAddPackage(
-#     NAME flecs
-#     GITHUB_REPOSITORY SanderMertens/flecs
-#     GIT_TAG v4.0.5
-#     OPTIONS
-#         "FLECS_STATIC OFF"
-#         "FLECS_SHARED ON"
-# )
+# flecs
+CPMAddPackage(
+    NAME flecs
+    GITHUB_REPOSITORY SanderMertens/flecs
+    GIT_TAG v4.0.5
+    OPTIONS
+        "FLECS_STATIC OFF"
+        "FLECS_SHARED ON"
+)
 
 # if(luajit_ADDED)
 #     set(LUAJIT_SRC_DIR ${luajit_SOURCE_DIR})
@@ -120,19 +120,19 @@ if(NOT EXISTS ${RAYLIB_DLL} OR "${raylib_SOURCE_DIR}/src/raylib.h" IS_NEWER_THAN
     add_custom_target(raylib_cache DEPENDS ${RAYLIB_DLL})
 endif()
 
-# # Check and configure flecs.dll
-# set(FLECS_DLL_SRC "${flecs_BINARY_DIR}/Debug/flecs.dll")
-# set(FLECS_DLL "${CACHE_DIR}/flecs.dll")
-# if(NOT EXISTS ${FLECS_DLL} OR "${flecs_SOURCE_DIR}/flecs.c" IS_NEWER_THAN ${FLECS_DLL})
-#     add_custom_command(
-#         OUTPUT ${FLECS_DLL}
-#         COMMAND ${CMAKE_COMMAND} -E echo "Copying flecs.dll from ${FLECS_DLL_SRC} to ${FLECS_DLL}"
-#         COMMAND ${CMAKE_COMMAND} -E copy_if_different ${FLECS_DLL_SRC} ${FLECS_DLL}
-#         DEPENDS flecs
-#         COMMENT "Caching flecs.dll from ${FLECS_DLL_SRC}"
-#     )
-#     add_custom_target(flecs_cache DEPENDS ${FLECS_DLL})
-# endif()
+# Check and configure flecs.dll
+set(FLECS_DLL_SRC "${flecs_BINARY_DIR}/Debug/flecs.dll")
+set(FLECS_DLL "${CACHE_DIR}/flecs.dll")
+if(NOT EXISTS ${FLECS_DLL} OR "${flecs_SOURCE_DIR}/flecs.c" IS_NEWER_THAN ${FLECS_DLL})
+    add_custom_command(
+        OUTPUT ${FLECS_DLL}
+        COMMAND ${CMAKE_COMMAND} -E echo "Copying flecs.dll from ${FLECS_DLL_SRC} to ${FLECS_DLL}"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${FLECS_DLL_SRC} ${FLECS_DLL}
+        DEPENDS flecs
+        COMMENT "Caching flecs.dll from ${FLECS_DLL_SRC}"
+    )
+    add_custom_target(flecs_cache DEPENDS ${FLECS_DLL})
+endif()
 
 # Check and configure mimalloc.dll (Updated to mimalloc-debug.dll)
 set(MIMALLOC_DLL_SRC "${mimalloc_BINARY_DIR}/Debug/mimalloc-debug.dll")  # Updated to match actual output
@@ -150,7 +150,9 @@ endif()
 
 # MAIN
 add_executable(${PROJECT_NAME} 
-    src/main.c 
+    src/main.c
+    # src/raylib_test.c
+    #${flecs_SOURCE_DIR}/src/
     # src/enet_lua.c 
     # src/raylib_lua.c 
     # src/raymath_lua.c 
@@ -164,9 +166,9 @@ add_executable(${PROJECT_NAME}
 if(TARGET raylib_cache)
     add_dependencies(${PROJECT_NAME} raylib_cache)
 endif()
-# if(TARGET flecs_cache)
-#     add_dependencies(${PROJECT_NAME} flecs_cache)
-# endif()
+if(TARGET flecs_cache)
+    add_dependencies(${PROJECT_NAME} flecs_cache)
+endif()
 if(TARGET mimalloc_cache)
     add_dependencies(${PROJECT_NAME} mimalloc_cache)
 endif()
@@ -177,13 +179,13 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     # ${luajit_SOURCE_DIR}/src
     # ${raygui_SOURCE_DIR}/src
     # ${enet_SOURCE_DIR}/include
-    # ${flecs_SOURCE_DIR}/include
+    ${flecs_SOURCE_DIR}/include
     ${mimalloc_SOURCE_DIR}/include
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
     raylib
-    # flecs
+    flecs
     # luajit
     mimalloc
 )
@@ -208,12 +210,12 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 #     COMMENT "Copying lua51.dll to output directory"
 # )
 
-# add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-#     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-#         "${FLECS_DLL}"
-#         "$<TARGET_FILE_DIR:${PROJECT_NAME}>/flecs.dll"
-#     COMMENT "Copying flecs.dll to output directory"
-# )
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${FLECS_DLL}"
+        "$<TARGET_FILE_DIR:${PROJECT_NAME}>/flecs.dll"
+    COMMENT "Copying flecs.dll to output directory"
+)
 
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different

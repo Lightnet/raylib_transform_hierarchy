@@ -1,6 +1,6 @@
 # raylib_transform_hierarchy
 
-# License: 
+# License: MIT
 
 # Raylib: 5.5
  

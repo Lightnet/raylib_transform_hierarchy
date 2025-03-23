@@ -1,6 +1,9 @@
 # raylib_transform_hierarchy
 
-# License: MIT
+# License: 
+
+# Raylib: 5.5
+ 
 
 # Information:
   This is very simple build test for learning how transform hierarchy works.

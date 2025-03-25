@@ -140,3 +140,6 @@ Learn More
 - Raylib: Graphics and math tools ([Raylib Cheatsheet](https://www.raylib.com/cheatsheet/cheatsheet.html))
 - Raymath: Math helper functions (part of Raylib)
 - Flecs: Entity-component-system library for organizing game objects
+
+Credits
+- Inspired by Gabor’s transform tutorial.

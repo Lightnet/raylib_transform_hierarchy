@@ -23,16 +23,19 @@ With help from Grok 3 (an AI assistant), you can experiment by searching "raylib
 
 What Works?
 
--  ![✅](https://abs-0.twimg.com/emoji/v2/svg/2705.svg "White heavy check mark") 2D Transform Hierarchy with Raylib
+-  ![✅]( "White heavy check mark") 2D Transform Hierarchy with Raylib
     
--  ![✅](https://abs-0.twimg.com/emoji/v2/svg/2705.svg "White heavy check mark") 3D Transform Hierarchy with Raylib
+-  ![✅]( "White heavy check mark") 3D Transform Hierarchy with Raylib
     
--  ![✅](https://abs-0.twimg.com/emoji/v2/svg/2705.svg "White heavy check mark") 2D Transform Hierarchy with Raylib + Flecs
+-  ![✅]( "White heavy check mark") 2D Transform Hierarchy with Raylib + Flecs
     
--  ![⚠️](https://abs-0.twimg.com/emoji/v2/svg/26a0.svg "Warning sign") 3D Transform Hierarchy with Raylib + Flecs (works partly, still improving)
+-  ![⚠️]( "Warning sign") 3D Transform Hierarchy with Raylib + Flecs (works partly, still improving)
     
+# CMakeLists.txt:
+ Work in progress. As there main.c file as main entry point. Make sure there one main entry point or use the examples loop to test those files.
 
-How to Build and Run
+
+# How to Build and Run
 
 1. Build: Run build.bat in your terminal (Windows).
 2. Run: Run run.bat to see it in action!

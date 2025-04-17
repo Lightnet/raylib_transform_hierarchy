@@ -1,3 +1,8 @@
+// note that flecs entity filter and pair code.
+// After testing.
+// once the child is part with the parent it will not count as entity in query.
+// add another transform3d. It count as long it not attach to parent.
+// more then two child is not working.
 #include "raylib.h"
 #include "raymath.h"
 #include "flecs.h"
@@ -123,7 +128,7 @@ void user_input_system(ecs_iter_t *it) {
 
     Transform3D *t = ecs_field(it, Transform3D, 0);
     float dt = GetFrameTime();
-
+    //test user input
     for (int i = 0; i < it->count; i++) {
       const char *name = ecs_get_name(it->world, it->entities[i]);
       if (name) {
@@ -242,7 +247,7 @@ int main(void) {
           { .id = ecs_pair(EcsChildOf, EcsWildcard), .oper = EcsNot }
       },
       .callback = render2d_hud_system
-  });
+    });
 
     ecs_system_init(world, &(ecs_system_desc_t){
         .entity = ecs_entity(world, {
@@ -310,6 +315,11 @@ int main(void) {
     };
     ecs_set_ctx(world, &camera, NULL);
 
+    ecs_singleton_set(world, PlayerInput_T, {
+      .isMovementMode=true,
+      .tabPressed=false
+    });
+
     Model cube = LoadModelFromMesh(GenMeshCube(1.0f, 1.0f, 1.0f));
 
     ecs_entity_t node1 = ecs_new(world);
@@ -337,10 +347,22 @@ int main(void) {
     ecs_set(world, node2, ModelComponent, {&cube});
     printf("Node2 entity ID: %llu (%s)\n", (unsigned long long)node2, ecs_get_name(world, node2));
 
-    ecs_singleton_set(world, PlayerInput_T, {
-      .isMovementMode=true,
-      .tabPressed=false
+
+    ecs_entity_t node3 = ecs_new(world);
+    ecs_set_name(world, node3, "Node3");
+    ecs_set(world, node3, Transform3D, {
+        .position = (Vector3){2.0f, 0.0f, 2.0f},
+        .rotation = QuaternionIdentity(),
+        .scale = (Vector3){0.5f, 0.5f, 0.5f},
+        .localMatrix = MatrixIdentity(),
+        .worldMatrix = MatrixIdentity()
     });
+    //ecs_add_pair(world, node3, EcsChildOf, node1);
+    ecs_set(world, node3, ModelComponent, {&cube});
+
+    printf("node3 entity ID: %llu (%s)\n", (unsigned long long)node3, ecs_get_name(world, node3));
+
+    
 
 
     while (!WindowShouldClose()) {

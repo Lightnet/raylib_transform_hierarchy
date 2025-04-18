@@ -44,6 +44,27 @@ void UpdateRootTransformSystem(ecs_iter_t *it) {
   }
 }
 
+// Comparison function for hierarchical ordering (parents before children)
+static int compare_entity(ecs_entity_t e1, const void *ptr1, ecs_entity_t e2, const void *ptr2) {
+  return (e1 < e2) ? -1 : (e1 > e2) ? 1 : 0;
+}
+
+static int compare_depth(ecs_entity_t e1, const void *ptr1, ecs_entity_t e2, const void *ptr2) {
+  ecs_world_t *world = ((ecs_iter_t*)ptr1)->world;
+  int depth1 = 0, depth2 = 0;
+  ecs_entity_t parent = e1;
+  while (parent && ecs_is_valid(world, parent)) {
+      depth1++;
+      parent = ecs_get_parent(world, parent);
+  }
+  parent = e2;
+  while (parent && ecs_is_valid(world, parent)) {
+      depth2++;
+      parent = ecs_get_parent(world, parent);
+  }
+  return depth1 - depth2; // Lower depth (parents) first
+}
+
 // Update transform for child entities (with parent)
 void UpdateChildTransformSystem(ecs_iter_t *it) {
   Transform3D *transforms = ecs_field(it, Transform3D, 0);
@@ -77,17 +98,25 @@ void UpdateChildTransformSystem(ecs_iter_t *it) {
           continue;
       }
 
-      // Validate parent transform values
-      if (fabs(parent_transform->worldMatrix.m12) > 1e6 || fabs(parent_transform->worldMatrix.m13) > 1e6 || fabs(parent_transform->worldMatrix.m14) > 1e6) {
-          printf("Error: Invalid parent %s world matrix (%.2f, %.2f, %.2f) for %s\n",
+      // Validate parent world matrix
+      float px = parent_transform->worldMatrix.m12;
+      float py = parent_transform->worldMatrix.m13;
+      float pz = parent_transform->worldMatrix.m14;
+      if (fabs(px) > 1e6 || fabs(py) > 1e6 || fabs(pz) > 1e6) {
+          printf("Error: Invalid parent %s world pos (%.2f, %.2f, %.2f) for %s\n",
                  ecs_get_name(it->world, parent) ? ecs_get_name(it->world, parent) : "(unnamed)",
-                 parent_transform->worldMatrix.m12, parent_transform->worldMatrix.m13, parent_transform->worldMatrix.m14, name);
+                 px, py, pz, name);
           transform->worldMatrix = transform->localMatrix;
           continue;
       }
 
-      // Compute world matrix
+      // Compute world matrix (reverted to original order)
       transform->worldMatrix = MatrixMultiply(transform->localMatrix, parent_transform->worldMatrix);
+
+      // Extract world position from worldMatrix
+      float wx = transform->worldMatrix.m12;
+      float wy = transform->worldMatrix.m13;
+      float wz = transform->worldMatrix.m14;
 
       // Debug output
       const char *parent_name = ecs_get_name(it->world, parent) ? ecs_get_name(it->world, parent) : "(unnamed)";
@@ -95,12 +124,9 @@ void UpdateChildTransformSystem(ecs_iter_t *it) {
              name, (unsigned long long)entity, parent_name, (unsigned long long)parent);
       printf("Child %s position (%.2f, %.2f, %.2f), parent %s world pos (%.2f, %.2f, %.2f), world pos (%.2f, %.2f, %.2f)\n",
              name, transform->position.x, transform->position.y, transform->position.z,
-             parent_name, parent_transform->worldMatrix.m12, parent_transform->worldMatrix.m13, parent_transform->worldMatrix.m14,
-             transform->worldMatrix.m12, transform->worldMatrix.m13, transform->worldMatrix.m14);
+             parent_name, px, py, pz, wx, wy, wz);
   }
 }
-
-
 
 // Render begin system
 void RenderBeginSystem(ecs_iter_t *it) {
@@ -125,24 +151,24 @@ void Camera3DSystem(ecs_iter_t *it) {
   for (int i = 0; i < it->count; i++) {
       ecs_entity_t entity = it->entities[i];
       if (!ecs_is_valid(it->world, entity)) {
-          printf("Skipping invalid entity ID: %llu\n", (unsigned long long)entity);
+          //printf("Skipping invalid entity ID: %llu\n", (unsigned long long)entity);
           continue;
       }
       const char *name = ecs_get_name(it->world, entity) ? ecs_get_name(it->world, entity) : "(unnamed)";
       if (!ecs_has(it->world, entity, Transform3D) || !ecs_has(it->world, entity, ModelComponent)) {
-          printf("Skipping entity %s: missing Transform3D or ModelComponent\n", name);
+          //printf("Skipping entity %s: missing Transform3D or ModelComponent\n", name);
           continue;
       }
       // Check for garbage values in world matrix
       if (fabs(t[i].worldMatrix.m12) > 1e6 || fabs(t[i].worldMatrix.m13) > 1e6 || fabs(t[i].worldMatrix.m14) > 1e6) {
-          printf("Skipping entity %s: invalid world matrix (%.2f, %.2f, %.2f)\n",
-                 name, t[i].worldMatrix.m12, t[i].worldMatrix.m13, t[i].worldMatrix.m14);
+          // printf("Skipping entity %s: invalid world matrix (%.2f, %.2f, %.2f)\n",
+          //        name, t[i].worldMatrix.m12, t[i].worldMatrix.m13, t[i].worldMatrix.m14);
           continue;
       }
-      printf("Rendering entity %s at world pos (%.2f, %.2f, %.2f)\n",
-             name, t[i].worldMatrix.m12, t[i].worldMatrix.m13, t[i].worldMatrix.m14);
+      // printf("Rendering entity %s at world pos (%.2f, %.2f, %.2f)\n",
+      //        name, t[i].worldMatrix.m12, t[i].worldMatrix.m13, t[i].worldMatrix.m14);
       if (!m[i].model) {
-          printf("Skipping entity %s: null model\n", name);
+          // printf("Skipping entity %s: null model\n", name);
           continue;
       }
       m[i].model->transform = t[i].worldMatrix;
@@ -151,14 +177,14 @@ void Camera3DSystem(ecs_iter_t *it) {
   }
   DrawGrid(10, 1.0f);
 
-  Camera3D *camera = (Camera3D *)ecs_get_ctx(it->world);
-  if (camera) {
-      DrawText(TextFormat("Camera Pos: %.2f, %.2f, %.2f",
-                          camera->position.x, camera->position.y, camera->position.z), 10, 90, 20, DARKGRAY);
-      DrawText(TextFormat("Entities Rendered: %d", it->count), 10, 110, 20, DARKGRAY);
-  }
+  // does not work here.
+  // Camera3D *camera = (Camera3D *)ecs_get_ctx(it->world);
+  // if (camera) {
+  //     DrawText(TextFormat("Camera Pos: %.2f, %.2f, %.2f",
+  //                         camera->position.x, camera->position.y, camera->position.z), 10, 90, 20, DARKGRAY);
+  //     DrawText(TextFormat("Entities Rendered: %d", it->count), 10, 110, 20, DARKGRAY);
+  // }
 }
-
 
 void EndCamera3DSystem(ecs_iter_t *it) {
   //printf("EndCamera3DSystem\n");
@@ -320,10 +346,16 @@ int main(void) {
           .name = "UpdateChildTransformSystem",
           .add = ecs_ids(ecs_dependson(LogicUpdatePhase))
       }),
-      .query.terms = {
-        { .id = ecs_id(Transform3D), .src.id = EcsSelf },
-        { .id = ecs_id(Transform3D), .src.id = EcsUp, .trav = EcsChildOf }
+      .query = {
+        .terms = {
+          { .id = ecs_id(Transform3D), .src.id = EcsSelf },
+          { .id = ecs_id(Transform3D), .src.id = EcsUp, .trav = EcsChildOf }
+        },
+        .order_by = ecs_id(Transform3D),
+        //.order_by_callback = compare_entity
+        //.order_by_callback = compare_depth
       },
+      
       .callback = UpdateChildTransformSystem
     });
 

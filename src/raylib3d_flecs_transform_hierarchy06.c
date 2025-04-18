@@ -470,73 +470,74 @@ int main(void) {
 
     ecs_entity_t node1 = ecs_entity(world, {
       .name = "NodeParent"
-  });
-  ecs_set(world, node1, Transform3D, {
-      .position = (Vector3){0.0f, 0.0f, 0.0f},
-      .rotation = QuaternionIdentity(),
-      .scale = (Vector3){1.0f, 1.0f, 1.0f},
-      .localMatrix = MatrixIdentity(),
-      .worldMatrix = MatrixIdentity(),
-      .isDirty = true
-  });
-  ecs_set(world, node1, ModelComponent, {&cube});
-  printf("Node1 entity ID: %llu (%s)\n", (unsigned long long)node1, ecs_get_name(world, node1));
-  printf("- Node1 valid: %d, has Transform3D: %d\n", ecs_is_valid(world, node1), ecs_has(world, node1, Transform3D));
-  
-  ecs_entity_t node2 = ecs_entity(world, {
-      .name = "NodeChild",
-      .parent = node1
-  });
-  ecs_set(world, node2, Transform3D, {
-      .position = (Vector3){2.0f, 0.0f, 0.0f},
-      .rotation = QuaternionIdentity(),
-      .scale = (Vector3){0.5f, 0.5f, 0.5f},
-      .localMatrix = MatrixIdentity(),
-      .worldMatrix = MatrixIdentity(),
-      .isDirty = true
-  });
-  ecs_set(world, node2, ModelComponent, {&cube});
-  printf("Node2 entity ID: %llu (%s)\n", (unsigned long long)node2, ecs_get_name(world, node2));
-  printf("- Node2 valid: %d, has Transform3D: %d, parent: %s\n",
-         ecs_is_valid(world, node2), ecs_has(world, node2, Transform3D),
-         ecs_get_name(world, ecs_get_parent(world, node2)));
-  
-  ecs_entity_t node3 = ecs_entity(world, {
-      .name = "Node3",
-      .parent = node1
-  });
-  ecs_set(world, node3, Transform3D, {
-      .position = (Vector3){2.0f, 0.0f, 2.0f},
-      .rotation = QuaternionIdentity(),
-      .scale = (Vector3){0.5f, 0.5f, 0.5f},
-      .localMatrix = MatrixIdentity(),
-      .worldMatrix = MatrixIdentity(),
-      .isDirty = true
-  });
-  ecs_set(world, node3, ModelComponent, {&cube});
-  printf("Node3 entity ID: %llu (%s)\n", (unsigned long long)node3, ecs_get_name(world, node3));
-  printf("- Node3 valid: %d, has Transform3D: %d, parent: %s\n",
+    });
+
+    ecs_set(world, node1, Transform3D, {
+        .position = (Vector3){0.0f, 0.0f, 0.0f},
+        .rotation = QuaternionIdentity(),
+        .scale = (Vector3){1.0f, 1.0f, 1.0f},
+        .localMatrix = MatrixIdentity(),
+        .worldMatrix = MatrixIdentity(),
+        .isDirty = true
+    });
+    ecs_set(world, node1, ModelComponent, {&cube});
+    printf("Node1 entity ID: %llu (%s)\n", (unsigned long long)node1, ecs_get_name(world, node1));
+    printf("- Node1 valid: %d, has Transform3D: %d\n", ecs_is_valid(world, node1), ecs_has(world, node1, Transform3D));
+    
+    ecs_entity_t node2 = ecs_entity(world, {
+        .name = "NodeChild",
+        .parent = node1
+    });
+    ecs_set(world, node2, Transform3D, {
+        .position = (Vector3){2.0f, 0.0f, 0.0f},
+        .rotation = QuaternionIdentity(),
+        .scale = (Vector3){0.5f, 0.5f, 0.5f},
+        .localMatrix = MatrixIdentity(),
+        .worldMatrix = MatrixIdentity(),
+        .isDirty = true
+    });
+    ecs_set(world, node2, ModelComponent, {&cube});
+    printf("Node2 entity ID: %llu (%s)\n", (unsigned long long)node2, ecs_get_name(world, node2));
+    printf("- Node2 valid: %d, has Transform3D: %d, parent: %s\n",
+           ecs_is_valid(world, node2), ecs_has(world, node2, Transform3D),
+           ecs_get_name(world, ecs_get_parent(world, node2)));
+    
+    ecs_entity_t node3 = ecs_entity(world, {
+        .name = "Node3",
+        .parent = node1
+    });
+    ecs_set(world, node3, Transform3D, {
+        .position = (Vector3){2.0f, 0.0f, 2.0f},
+        .rotation = QuaternionIdentity(),
+        .scale = (Vector3){0.5f, 0.5f, 0.5f},
+        .localMatrix = MatrixIdentity(),
+        .worldMatrix = MatrixIdentity(),
+        .isDirty = true
+    });
+    ecs_set(world, node3, ModelComponent, {&cube});
+    printf("Node3 entity ID: %llu (%s)\n", (unsigned long long)node3, ecs_get_name(world, node3));
+    printf("- Node3 valid: %d, has Transform3D: %d, parent: %s\n",
          ecs_is_valid(world, node3), ecs_has(world, node3, Transform3D),
          ecs_get_name(world, ecs_get_parent(world, node3)));
 
 
-      ecs_entity_t node4 = ecs_entity(world, {
-          .name = "NodeGrandchild",
-          .parent = node2
-      });
-      ecs_set(world, node4, Transform3D, {
-          .position = (Vector3){1.0f, 0.0f, 1.0f},
-          .rotation = QuaternionIdentity(),
-          .scale = (Vector3){0.5f, 0.5f, 0.5f},
-          .localMatrix = MatrixIdentity(),
-          .worldMatrix = MatrixIdentity(),
-          .isDirty = true
-      });
-      ecs_set(world, node4, ModelComponent, {&cube});
-      // printf("Node4 entity ID: %llu (%s)\n", (unsigned long long)node4, ecs_get_name(world, node4));
-      // printf("- Node4 valid: %d, has Transform3D: %d, parent: %s\n",
-      //        ecs_is_valid(world, node4), ecs_has(world, node4, Transform3D),
-      //        ecs_get_name(world, ecs_get_parent(world, node4)));
+    ecs_entity_t node4 = ecs_entity(world, {
+        .name = "NodeGrandchild",
+        .parent = node2
+    });
+    ecs_set(world, node4, Transform3D, {
+        .position = (Vector3){1.0f, 0.0f, 1.0f},
+        .rotation = QuaternionIdentity(),
+        .scale = (Vector3){0.5f, 0.5f, 0.5f},
+        .localMatrix = MatrixIdentity(),
+        .worldMatrix = MatrixIdentity(),
+        .isDirty = true
+    });
+    ecs_set(world, node4, ModelComponent, {&cube});
+    // printf("Node4 entity ID: %llu (%s)\n", (unsigned long long)node4, ecs_get_name(world, node4));
+    // printf("- Node4 valid: %d, has Transform3D: %d, parent: %s\n",
+    //        ecs_is_valid(world, node4), ecs_has(world, node4, Transform3D),
+    //        ecs_get_name(world, ecs_get_parent(world, node4)));
 
     while (!WindowShouldClose()) {
       ecs_progress(world, 0);

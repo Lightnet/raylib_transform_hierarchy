@@ -23,13 +23,10 @@ With help from Grok 3 (an AI assistant), you can experiment by searching "raylib
 
 What Works?
 
--  ![✅]( "White heavy check mark") 2D Transform Hierarchy with Raylib
-    
--  ![✅]( "White heavy check mark") 3D Transform Hierarchy with Raylib
-    
--  ![✅]( "White heavy check mark") 2D Transform Hierarchy with Raylib + Flecs
-    
--  ![⚠️]( "Warning sign") 3D Transform Hierarchy with Raylib + Flecs (works partly, still improving)
+- [x] 2D Transform Hierarchy with Raylib
+- [x] 3D Transform Hierarchy with Raylib
+- [x] 2D Transform Hierarchy with Raylib + Flecs
+- [x] 3D Transform Hierarchy with Raylib + Flecs
     
 # CMakeLists.txt:
  Work in progress. As there main.c file as main entry point. Make sure there one main entry point or use the examples loop to test those files.

@@ -1,145 +1,94 @@
-# raylib_transform_hierarchy
+# Raylib Transform Hierarchy
 
-A simple project to learn how transform hierarchies work in C using Raylib and Flecs.
+# License: MIT
 
-# License
+# Libraries:
+- Raylib: 5.5
+- Flecs: 4.0.5
+# Overview
 
-MIT License - Free to use, modify, and share!
+This project is a simple test to demonstrate how a transform hierarchy works in Raylib using C. It shows how to manage parent-child relationships to calculate transformations (position, rotation, scale) for objects in a scene, organized like a tree structure.
 
-# What You Need
-
-- Libraries:
-    - Raylib 5.5 (for graphics and math)
-    - Flecs 4.0.5 (for entity-component-system management)
-- Tools:
-    - CMake (to build the project)
-    - Visual Studio 2022 (or any C compiler, but VS2022 is recommended)
-
-What Is This Project?
-
-This is a beginner-friendly test to understand transform hierarchies in C. Imagine a tree where objects (like a parent and its children) are connected. Each object has a position, rotation, and scale, and when the parent moves or rotates, the children follow along. This project shows how to code that in C with Raylib!
-
-With help from Grok 3 (an AI assistant), you can experiment by searching "raylib c transform hierarchy" and using Raylib/Raymath cheatsheets.
-
-What Works?
-
-- [x] 2D Transform Hierarchy with Raylib
-- [x] 3D Transform Hierarchy with Raylib
-- [x] 2D Transform Hierarchy with Raylib + Flecs
-- [x] 3D Transform Hierarchy with Raylib + Flecs
-    
-# CMakeLists.txt:
- Work in progress. As there main.c file as main entry point. Make sure there one main entry point or use the examples loop to test those files.
-
-
-# How to Build and Run
-
-1. Build: Run build.bat in your terminal (Windows).
-2. Run: Run run.bat to see it in action!
+The code uses a tree-based approach where:
+- A parent node (like a tree trunk) holds a transform (position, rotation, scale).
+- Child nodes (like branches) inherit and combine their transforms with their parent's transform.
+- Transformations are calculated from local (relative to the parent) to world (absolute) coordinates.
     
 
-Simple Code Example
+With help from Grok 3, you can generate transform hierarchy logic by providing a prompt like: "raylib c transform hierarchy" along with a cheat sheet.
 
-Here’s a basic example of a transform hierarchy in C:
+# Transform Hierarchy Explained
 
-c
-```c
-#include "raylib.h"
-#include "raymath.h"
-
-// A "node" is like an object with position, rotation, and scale
-typedef struct TransformNode {
-    Vector3 position;         // Where it is (x, y, z)
-    Quaternion rotation;      // How it’s rotated
-    Vector3 scale;            // How big it is (x, y, z)
-    Matrix localMatrix;       // Its own transform
-    Matrix worldMatrix;       // Its transform including the parent’s
-    struct TransformNode* parent;  // Link to parent (NULL if no parent)
-    Color color;              // Color for drawing
-    Color wire_color;         // Outline color
-} TransformNode;
-
-// Create a new node
-TransformNode CreateTransformNode(Vector3 pos, Quaternion rot, Vector3 scl, 
-                                 TransformNode* parent, Color color, Color wire_color) {
-    TransformNode node = {
-        .position = pos,
-        .rotation = rot,
-        .scale = scl,
-        .localMatrix = MatrixIdentity(),  // Starts with no transform
-        .worldMatrix = MatrixIdentity(),
-        .parent = parent,
-        .color = color,
-        .wire_color = wire_color
-    };
-    return node;
-}
-
-// Update the node’s position based on its parent
-void UpdateTransform(TransformNode* node) {
-    Matrix translation = MatrixTranslate(node->position.x, node->position.y, node->position.z);
-    Matrix rotation = QuaternionToMatrix(node->rotation);
-    Matrix scaling = MatrixScale(node->scale.x, node->scale.y, node->scale.z);
-
-    // Combine scale, rotation, and position into one transform
-    node->localMatrix = MatrixMultiply(scaling, MatrixMultiply(rotation, translation));
+A transform hierarchy organizes objects in a tree structure to manage their transformations:
+- Nodes: Each node represents an object with a local transform (position, rotation, scale).
+- Parent-Child Relationships: A parent node’s transform affects all its children. Children combine their local transform with their parent’s world transform to compute their final world transform.
+- Tree Traversal: The hierarchy is updated by looping through the tree, starting from the root (topmost parent), to calculate each node’s world transform based on its parent’s transform.
     
-    // If it has a parent, include the parent’s transform
-    if (node->parent != NULL) {
-        node->worldMatrix = MatrixMultiply(node->localMatrix, node->parent->worldMatrix);
-    } else {
-        node->worldMatrix = node->localMatrix;
-    }
-}
 
-// Example: A parent and a child
-TransformNode parent = CreateTransformNode(
-    (Vector3){ 0.0f, 0.0f, 0.0f },  // Position at origin
-    QuaternionIdentity(),            // No rotation
-    (Vector3){ 1.0f, 1.0f, 1.0f },  // Normal size
-    NULL,                            // No parent (root node)
-    RED,                             // Red color
-    BLACK                            // Black outline
-);
+# Example
 
-TransformNode child = CreateTransformNode(
-    (Vector3){ 2.0f, 0.0f, 0.0f },           // 2 units right of parent
-    QuaternionFromAxisAngle((Vector3){ 0, 1, 0 }, DEG2RAD * 45),  // Rotate 45°
-    (Vector3){ 0.5f, 0.5f, 0.5f },          // Half size
-    &parent,                                 // Linked to parent
-    BLUE,                                    // Blue color
-    WHITE                                    // White outline
-);
+Imagine a solar system:
+- The Sun is the root node (parent).
+- A Planet is a child of the Sun, orbiting around it.
+- A Moon is a child of the Planet, orbiting the Planet while also moving with it around the Sun. The Moon’s final position depends on both the Planet’s and Sun’s transforms.
 
-// Update both nodes
-UpdateTransform(&parent);
-UpdateTransform(&child);
-```
+How It Works
 
-This creates a "parent" object at (0,0,0) and a "child" object 2 units to the right, rotated 45 degrees, and half the size. The child moves with the parent!
+1. Define Nodes: Each node has:
+    - Local transform (position, rotation, scale).
+    - A reference to its parent (if any).
+    - A list of children.
+        
+2. Update Transforms:
+    - Start at the root node.
+    - Calculate the world transform by combining local transforms with the parent’s world transform (using matrix multiplication).
+    - Recursively update all children.
+        
+3. Render: Use Raylib to draw objects at their computed world transforms.
+    
+# Visual Diagram
 
-Visual Diagram
-
-Here’s how the hierarchy looks:
+Below is a textual representation of the transform hierarchy tree. You can visualize it as a flowchart or use a tool like Mermaid to generate it.
 
 ```text
-[Parent] ----> [Child]
-   |               |
-Position: (0,0,0)  Position: (2,0,0)
-Rotation: 0°       Rotation: 45°
-Scale: 1x          Scale: 0.5x
+Root (e.g., Sun)
+  ├── Child 1 (e.g., Planet)
+  │     ├── Grandchild 1 (e.g., Moon)
+  │     └── Grandchild 2
+  └── Child 2
 ```
 
-(Imagine a red square with a smaller blue square attached to its right side, tilted 45°!)  
-(Note: To generate an actual image, let me know if you’d like one!)
+## Diagram Description:
 
-Learn More
+- Nodes: Represented as circles or boxes labeled with the object (e.g., "Sun", "Planet", "Moon").
+- Edges: Arrows pointing from parent to child, showing the hierarchy.
+- Labels: Each node includes its local transform (e.g., "Pos: (x,y,z), Rot: θ, Scale: s").
+- Flow: A dashed line shows the update order (root → children → grandchildren).
+    
 
-- Transforms Explained: [Gabor Makes Games - Transforms](https://gabormakesgames.com/blog_transforms.html)
-- Project Code: [GitHub - raylib_transform_hierarchy](https://github.com/Lightnet/raylib_transform_hierarchy)
-- Raylib: Graphics and math tools ([Raylib Cheatsheet](https://www.raylib.com/cheatsheet/cheatsheet.html))
-- Raymath: Math helper functions (part of Raylib)
-- Flecs: Entity-component-system library for organizing game objects
+```mermaid
+graph TD
+    A[Root: Sun<br>Pos: (0,0,0)<br>Rot: 0<br>Scale: 1] --> B[Child 1: Planet<br>Pos: (5,0,0)<br>Rot: 45°<br>Scale: 0.5]
+    A --> C[Child 2]
+    B --> D[Grandchild 1: Moon<br>Pos: (1,0,0)<br>Rot: 30°<br>Scale: 0.2]
+    B --> E[Grandchild 2]
+```
 
-Credits
-- Inspired by Gabor’s transform tutorial.
+# Getting Started
+
+1. Dependencies: VS2022, CMake
+2. Build: Compile the project using the provided source code.
+3. Run: Execute the program to see a simple transform hierarchy in action.
+4. Experiment: Modify the hierarchy (add/remove nodes) to understand parent-child relationships.
+    
+# Tips
+
+- Use Grok 3 to generate or debug transform logic. Prompt example: "Create a Raylib C transform hierarchy with a parent and two children."
+- Check Raylib’s matrix functions (MatrixTranslate, MatrixRotate, MatrixScale) for transform calculations.
+- Ensure the update loop processes parents before children to maintain correct transform dependencies.
+
+# Resources
+
+- [Raylib Documentation](https://www.raylib.com/)
+- [Flecs Documentation](https://www.flecs.dev/flecs/)
+- [xAI Grok](https://x.ai/grok) for AI-assisted coding.

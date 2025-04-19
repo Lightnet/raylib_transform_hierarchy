@@ -66,11 +66,11 @@ Root (e.g., Sun)
 - Flow: A dashed line shows the update order (root → children → grandchildren).
     
 
-```mermaid
+```
 graph TD
-    A[Root: Sun<br>Pos: (0,0,0)<br>Rot: 0<br>Scale: 1] --> B[Child 1: Planet<br>Pos: (5,0,0)<br>Rot: 45°<br>Scale: 0.5]
+    A[Root: Sun\nPos: (0,0,0)\nRot: 0\nScale: 1] --> B[Child 1: Planet\nPos: (5,0,0)\nRot: 45°\nScale: 0.5]
     A --> C[Child 2]
-    B --> D[Grandchild 1: Moon<br>Pos: (1,0,0)<br>Rot: 30°<br>Scale: 0.2]
+    B --> D[Grandchild 1: Moon\nPos: (1,0,0)\nRot: 30°\nScale: 0.2]
     B --> E[Grandchild 2]
 ```
 

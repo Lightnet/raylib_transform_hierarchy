@@ -68,9 +68,18 @@ Root (e.g., Sun)
 
 ```mermaid
 graph TD
-    A[Root: Sun\nPos: 0,0,0\nRot: 0\nScale: 1] --> B[Child 1: Planet\nPos: 5,0,0\nRot: 45deg\nScale: 0.5]
+    A["Root: Sun 
+    Pos: 0,0,0 
+    Rot: 0 
+    Scale: 1"] --> B["Child 1: Planet
+    Pos: 5,0,0
+    Rot: 45deg
+    Scale: 0.5"]
     A --> C[Child 2]
-    B --> D[Grandchild 1: Moon\nPos: 1,0,0\nRot: 30deg\nScale: 0.2]
+    B --> D["Grandchild 1: Moon
+    Pos: 1,0,0
+    Rot: 30deg
+    Scale: 0.2"]
     B --> E[Grandchild 2]
 ```
 

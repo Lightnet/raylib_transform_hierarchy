@@ -66,13 +66,15 @@ Root (e.g., Sun)
 - Flow: A dashed line shows the update order (root → children → grandchildren).
     
 
-```
+```mermaid
 graph TD
     A[Root: Sun\nPos: (0,0,0)\nRot: 0\nScale: 1] --> B[Child 1: Planet\nPos: (5,0,0)\nRot: 45°\nScale: 0.5]
     A --> C[Child 2]
     B --> D[Grandchild 1: Moon\nPos: (1,0,0)\nRot: 30°\nScale: 0.2]
     B --> E[Grandchild 2]
 ```
+
+
 
 # Getting Started
 

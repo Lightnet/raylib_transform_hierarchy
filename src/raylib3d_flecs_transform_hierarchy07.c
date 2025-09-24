@@ -1,4 +1,4 @@
-// 
+// flecs v4.1.1
 
 #include <stdio.h>
 #include "raylib.h"
@@ -32,53 +32,43 @@ typedef struct {
 } PlayerInput_T;
 ECS_COMPONENT_DECLARE(PlayerInput_T);
 
-
-// https://discord.com/channels/633826290415435777/633826290415435781/1353923699819941899
-// Comparison function for hierarchical ordering (parents before children)
-// does not work.
-static int compare_entity(ecs_entity_t e1, const void *ptr1, ecs_entity_t e2, const void *ptr2) {
-  return (e1 < e2) ? -1 : (e1 > e2) ? 1 : 0;
-}
-//does not work.
-static int compare_depth(ecs_entity_t e1, const void *ptr1, ecs_entity_t e2, const void *ptr2) {
-  ecs_world_t *world = ((ecs_iter_t*)ptr1)->world;
-  int depth1 = 0, depth2 = 0;
-  ecs_entity_t parent = e1;
-  while (parent && ecs_is_valid(world, parent)) {
-      depth1++;
-      parent = ecs_get_parent(world, parent);
-  }
-  parent = e2;
-  while (parent && ecs_is_valid(world, parent)) {
-      depth2++;
-      parent = ecs_get_parent(world, parent);
-  }
-  return depth1 - depth2; // Lower depth (parents) first
-}
-
-
 // Helper function to update a single transform
 void UpdateTransform(ecs_world_t *world, ecs_entity_t entity, Transform3D *transform) {
+  // Get parent entity
+  ecs_entity_t parent = ecs_get_parent(world, entity);
+  const char *name = ecs_get_name(world, entity) ? ecs_get_name(world, entity) : "(unnamed)";
+  bool parentIsDirty = false;
+
+  // Check if parent is dirty
+  if (parent && ecs_is_valid(world, parent)) {
+      const Transform3D *parent_transform = ecs_get(world, parent, Transform3D);
+      if (parent_transform && parent_transform->isDirty) {
+          parentIsDirty = true;
+      }
+  }
+
+  // Skip update if neither this transform nor its parent is dirty
+  if (!transform->isDirty && !parentIsDirty) {
+      // printf("Skipping update for %s (not dirty)\n", name);
+      return;
+  }
+
   // Compute local transform
   Matrix translation = MatrixTranslate(transform->position.x, transform->position.y, transform->position.z);
   Matrix rotation = QuaternionToMatrix(transform->rotation);
   Matrix scaling = MatrixScale(transform->scale.x, transform->scale.y, transform->scale.z);
   transform->localMatrix = MatrixMultiply(scaling, MatrixMultiply(rotation, translation));
 
-  // Get parent entity
-  ecs_entity_t parent = ecs_get_parent(world, entity);
-  const char *name = ecs_get_name(world, entity) ? ecs_get_name(world, entity) : "(unnamed)";
-
   if (!parent || !ecs_is_valid(world, parent)) {
       // Root entity: world matrix = local matrix
       transform->worldMatrix = transform->localMatrix;
-      printf("Root %s position (%.2f, %.2f, %.2f)\n", name, transform->position.x, transform->position.y, transform->position.z);
+    //   printf("Root %s position (%.2f, %.2f, %.2f)\n", name, transform->position.x, transform->position.y, transform->position.z);
   } else {
       // Child entity: world matrix = local matrix * parent world matrix
       const Transform3D *parent_transform = ecs_get(world, parent, Transform3D);
       if (!parent_transform) {
-          printf("Error: Parent %s lacks Transform3D for %s\n",
-                 ecs_get_name(world, parent) ? ecs_get_name(world, parent) : "(unnamed)", name);
+        //   printf("Error: Parent %s lacks Transform3D for %s\n",
+        //          ecs_get_name(world, parent) ? ecs_get_name(world, parent) : "(unnamed)", name);
           transform->worldMatrix = transform->localMatrix;
           return;
       }
@@ -88,9 +78,9 @@ void UpdateTransform(ecs_world_t *world, ecs_entity_t entity, Transform3D *trans
       float py = parent_transform->worldMatrix.m13;
       float pz = parent_transform->worldMatrix.m14;
       if (fabs(px) > 1e6 || fabs(py) > 1e6 || fabs(pz) > 1e6) {
-          printf("Error: Invalid parent %s world pos (%.2f, %.2f, %.2f) for %s\n",
-                 ecs_get_name(world, parent) ? ecs_get_name(world, parent) : "(unnamed)",
-                 px, py, pz, name);
+        //   printf("Error: Invalid parent %s world pos (%.2f, %.2f, %.2f) for %s\n",
+        //          ecs_get_name(world, parent) ? ecs_get_name(world, parent) : "(unnamed)",
+        //          px, py, pz, name);
           transform->worldMatrix = transform->localMatrix;
           return;
       }
@@ -104,24 +94,55 @@ void UpdateTransform(ecs_world_t *world, ecs_entity_t entity, Transform3D *trans
       float wz = transform->worldMatrix.m14;
 
       // Debug output
-      const char *parent_name = ecs_get_name(world, parent) ? ecs_get_name(world, parent) : "(unnamed)";
-      printf("Child %s (ID: %llu), parent %s (ID: %llu)\n",
-             name, (unsigned long long)entity, parent_name, (unsigned long long)parent);
-      printf("Child %s position (%.2f, %.2f, %.2f), parent %s world pos (%.2f, %.2f, %.2f), world pos (%.2f, %.2f, %.2f)\n",
-             name, transform->position.x, transform->position.y, transform->position.z,
-             parent_name, px, py, pz, wx, wy, wz);
+    //   const char *parent_name = ecs_get_name(world, parent) ? ecs_get_name(world, parent) : "(unnamed)";
+    //   printf("Child %s (ID: %llu), parent %s (ID: %llu)\n",
+    //          name, (unsigned long long)entity, parent_name, (unsigned long long)parent);
+    //   printf("Child %s position (%.2f, %.2f, %.2f), parent %s world pos (%.2f, %.2f, %.2f), world pos (%.2f, %.2f, %.2f)\n",
+    //          name, transform->position.x, transform->position.y, transform->position.z,
+    //          parent_name, px, py, pz, wx, wy, wz);
   }
+
+  // Mark children as dirty to ensure they update in the next frame
+  ecs_iter_t it = ecs_children(world, entity);
+  while (ecs_children_next(&it)) {
+      for (int i = 0; i < it.count; i++) {
+          Transform3D *child_transform = ecs_get_mut(world, it.entities[i], Transform3D);
+          if (child_transform) {
+              child_transform->isDirty = true;
+              //ecs_set(world, it.entities[i], Transform3D, *child_transform);
+          }
+      }
+  }
+
+  // Reset isDirty after updating
+  transform->isDirty = false;
 }
-
-
 
 // Recursive function to process entity and its children
 void ProcessEntityHierarchy(ecs_world_t *world, ecs_entity_t entity) {
   // Update the current entity's transform
   Transform3D *transform = ecs_get_mut(world, entity, Transform3D);
+  bool wasUpdated = false;
   if (transform) {
-      UpdateTransform(world, entity, transform);
-      //ecs_set(world, entity, Transform3D, *transform); // Commit changes
+      // Only update if dirty or parent is dirty
+      ecs_entity_t parent = ecs_get_parent(world, entity);
+      bool parentIsDirty = false;
+      if (parent && ecs_is_valid(world, parent)) {
+          const Transform3D *parent_transform = ecs_get(world, parent, Transform3D);
+          if (parent_transform && parent_transform->isDirty) {
+              parentIsDirty = true;
+          }
+      }
+      if (transform->isDirty || parentIsDirty) {
+          UpdateTransform(world, entity, transform);
+          //ecs_set(world, entity, Transform3D, *transform); // Commit changes
+          wasUpdated = true;
+      }
+  }
+
+  // Skip processing children if this entity was not updated
+  if (!wasUpdated) {
+      return;
   }
 
   // Iterate through children
@@ -134,7 +155,6 @@ void ProcessEntityHierarchy(ecs_world_t *world, ecs_entity_t entity) {
   }
 }
 
-
 // System to update all transforms in hierarchical order
 void UpdateTransformHierarchySystem(ecs_iter_t *it) {
   // Process only root entities (no parent)
@@ -144,7 +164,6 @@ void UpdateTransformHierarchySystem(ecs_iter_t *it) {
       ProcessEntityHierarchy(it->world, entity);
   }
 }
-
 
 // Render begin system
 void RenderBeginSystem(ecs_iter_t *it) {
@@ -230,64 +249,62 @@ void user_input_system(ecs_iter_t *it) {
       if (name) {
         bool isFound = false;
         if (strcmp(name, "NodeParent") == 0) {
-          isFound=true;
-        }
-        bool wasModified = false;
-        if(isFound == false){
-          return;
-        }
 
-        if (IsKeyPressed(KEY_TAB)) {
-          pi_ctx->isMovementMode = !pi_ctx->isMovementMode;
-          printf("Toggled mode to: %s\n", pi_ctx->isMovementMode ? "Movement" : "Rotation");
-        }
+          bool wasModified = false;
 
-        if (pi_ctx->isMovementMode) {
-            if (IsKeyDown(KEY_W)){t[i].position.z -= 2.0f * dt;wasModified = true;}
-            if (IsKeyDown(KEY_S)){t[i].position.z += 2.0f * dt;wasModified = true;}
-            if (IsKeyDown(KEY_A)){t[i].position.x -= 2.0f * dt;wasModified = true;}
-            if (IsKeyDown(KEY_D)){t[i].position.x += 2.0f * dt;wasModified = true;}
-        } else {
-            float rotateSpeed = 90.0f;
-            if (IsKeyDown(KEY_Q)) {
-                Quaternion rot = QuaternionFromAxisAngle((Vector3){0, 1, 0}, DEG2RAD * rotateSpeed * dt);
-                t[i].rotation = QuaternionMultiply(t[i].rotation, rot);
-                wasModified = true;
-            }
-            if (IsKeyDown(KEY_E)) {
-                Quaternion rot = QuaternionFromAxisAngle((Vector3){0, 1, 0}, -DEG2RAD * rotateSpeed * dt);
-                t[i].rotation = QuaternionMultiply(t[i].rotation, rot);
-                wasModified = true;
-            }
-            if (IsKeyDown(KEY_W)) {
-                Quaternion rot = QuaternionFromAxisAngle((Vector3){1, 0, 0}, DEG2RAD * rotateSpeed * dt);
-                t[i].rotation = QuaternionMultiply(t[i].rotation, rot);
-                wasModified = true;
-            }
-            if (IsKeyDown(KEY_S)) {
-                Quaternion rot = QuaternionFromAxisAngle((Vector3){1, 0, 0}, -DEG2RAD * rotateSpeed * dt);
-                t[i].rotation = QuaternionMultiply(t[i].rotation, rot);
-                wasModified = true;
-            }
-            if (IsKeyDown(KEY_A)) {
-                Quaternion rot = QuaternionFromAxisAngle((Vector3){0, 0, 1}, DEG2RAD * rotateSpeed * dt);
-                t[i].rotation = QuaternionMultiply(t[i].rotation, rot);
-                wasModified = true;
-            }
-            if (IsKeyDown(KEY_D)) {
-                Quaternion rot = QuaternionFromAxisAngle((Vector3){0, 0, 1}, -DEG2RAD * rotateSpeed * dt);
-                t[i].rotation = QuaternionMultiply(t[i].rotation, rot);
-                wasModified = true;
-            }
-        }
-        if (IsKeyPressed(KEY_R)) {
-            t[i].position = (Vector3){0.0f, 0.0f, 0.0f};
-            t[i].rotation = QuaternionIdentity();
-            t[i].scale = (Vector3){1.0f, 1.0f, 1.0f};
-            wasModified = true;
-        }
-        if (wasModified) {
-          t[i].isDirty = true;
+          if (IsKeyPressed(KEY_TAB)) {
+            pi_ctx->isMovementMode = !pi_ctx->isMovementMode;
+            // printf("Toggled mode to: %s\n", pi_ctx->isMovementMode ? "Movement" : "Rotation");
+          }
+
+          if (pi_ctx->isMovementMode) {
+              if (IsKeyDown(KEY_W)){t[i].position.z -= 2.0f * dt;wasModified = true;}
+              if (IsKeyDown(KEY_S)){t[i].position.z += 2.0f * dt;wasModified = true;}
+              if (IsKeyDown(KEY_A)){t[i].position.x -= 2.0f * dt;wasModified = true;}
+              if (IsKeyDown(KEY_D)){t[i].position.x += 2.0f * dt;wasModified = true;}
+          } else {
+              float rotateSpeed = 90.0f;
+              if (IsKeyDown(KEY_Q)) {
+                  Quaternion rot = QuaternionFromAxisAngle((Vector3){0, 1, 0}, DEG2RAD * rotateSpeed * dt);
+                  t[i].rotation = QuaternionMultiply(t[i].rotation, rot);
+                  wasModified = true;
+              }
+              if (IsKeyDown(KEY_E)) {
+                  Quaternion rot = QuaternionFromAxisAngle((Vector3){0, 1, 0}, -DEG2RAD * rotateSpeed * dt);
+                  t[i].rotation = QuaternionMultiply(t[i].rotation, rot);
+                  wasModified = true;
+              }
+              if (IsKeyDown(KEY_W)) {
+                  Quaternion rot = QuaternionFromAxisAngle((Vector3){1, 0, 0}, DEG2RAD * rotateSpeed * dt);
+                  t[i].rotation = QuaternionMultiply(t[i].rotation, rot);
+                  wasModified = true;
+              }
+              if (IsKeyDown(KEY_S)) {
+                  Quaternion rot = QuaternionFromAxisAngle((Vector3){1, 0, 0}, -DEG2RAD * rotateSpeed * dt);
+                  t[i].rotation = QuaternionMultiply(t[i].rotation, rot);
+                  wasModified = true;
+              }
+              if (IsKeyDown(KEY_A)) {
+                  Quaternion rot = QuaternionFromAxisAngle((Vector3){0, 0, 1}, DEG2RAD * rotateSpeed * dt);
+                  t[i].rotation = QuaternionMultiply(t[i].rotation, rot);
+                  wasModified = true;
+              }
+              if (IsKeyDown(KEY_D)) {
+                  Quaternion rot = QuaternionFromAxisAngle((Vector3){0, 0, 1}, -DEG2RAD * rotateSpeed * dt);
+                  t[i].rotation = QuaternionMultiply(t[i].rotation, rot);
+                  wasModified = true;
+              }
+          }
+          if (IsKeyPressed(KEY_R)) {
+              t[i].position = (Vector3){0.0f, 0.0f, 0.0f};
+              t[i].rotation = QuaternionIdentity();
+              t[i].scale = (Vector3){1.0f, 1.0f, 1.0f};
+              wasModified = true;
+          }
+          if (wasModified) {
+            t[i].isDirty = true;
+            printf("Marked %s as dirty\n", name);
+          }
         }
       }
     }
@@ -344,7 +361,6 @@ int main(void) {
         .entity = ecs_entity(world, { .name = "user_input_system", .add = ecs_ids(ecs_dependson(LogicUpdatePhase)) }),
         .query.terms = {
             { .id = ecs_id(Transform3D), .src.id = EcsSelf },
-            //{ .id = ecs_pair(EcsChildOf, EcsWildcard), .oper = EcsNot }
         },
         .callback = user_input_system
     });
@@ -369,7 +385,6 @@ int main(void) {
       },
       .callback = UpdateTransformHierarchySystem
     });
-
 
     ecs_system_init(world, &(ecs_system_desc_t){
       .entity = ecs_entity(world, { .name = "RenderBeginSystem", 
@@ -433,72 +448,74 @@ int main(void) {
 
     ecs_entity_t node1 = ecs_entity(world, {
       .name = "NodeParent"
-  });
-  ecs_set(world, node1, Transform3D, {
-      .position = (Vector3){0.0f, 0.0f, 0.0f},
-      .rotation = QuaternionIdentity(),
-      .scale = (Vector3){1.0f, 1.0f, 1.0f},
-      .localMatrix = MatrixIdentity(),
-      .worldMatrix = MatrixIdentity(),
-      .isDirty = true
-  });
-  ecs_set(world, node1, ModelComponent, {&cube});
-  printf("Node1 entity ID: %llu (%s)\n", (unsigned long long)node1, ecs_get_name(world, node1));
-  printf("- Node1 valid: %d, has Transform3D: %d\n", ecs_is_valid(world, node1), ecs_has(world, node1, Transform3D));
-  
-  ecs_entity_t node2 = ecs_entity(world, {
-      .name = "NodeChild",
-      .parent = node1
-  });
-  ecs_set(world, node2, Transform3D, {
-      .position = (Vector3){2.0f, 0.0f, 0.0f},
-      .rotation = QuaternionIdentity(),
-      .scale = (Vector3){0.5f, 0.5f, 0.5f},
-      .localMatrix = MatrixIdentity(),
-      .worldMatrix = MatrixIdentity()
-  });
-  ecs_set(world, node2, ModelComponent, {&cube});
-  printf("Node2 entity ID: %llu (%s)\n", (unsigned long long)node2, ecs_get_name(world, node2));
-  printf("- Node2 valid: %d, has Transform3D: %d, parent: %s\n",
-         ecs_is_valid(world, node2), ecs_has(world, node2, Transform3D),
-         ecs_get_name(world, ecs_get_parent(world, node2)));
-  
-  ecs_entity_t node3 = ecs_entity(world, {
-      .name = "Node3",
-      .parent = node1
-  });
-  ecs_set(world, node3, Transform3D, {
-      .position = (Vector3){2.0f, 0.0f, 2.0f},
-      .rotation = QuaternionIdentity(),
-      .scale = (Vector3){0.5f, 0.5f, 0.5f},
-      .localMatrix = MatrixIdentity(),
-      .worldMatrix = MatrixIdentity()
-  });
-  ecs_set(world, node3, ModelComponent, {&cube});
-  printf("Node3 entity ID: %llu (%s)\n", (unsigned long long)node3, ecs_get_name(world, node3));
-  printf("- Node3 valid: %d, has Transform3D: %d, parent: %s\n",
-         ecs_is_valid(world, node3), ecs_has(world, node3, Transform3D),
-         ecs_get_name(world, ecs_get_parent(world, node3)));
+    });
 
-
-      ecs_entity_t node4 = ecs_entity(world, {
-          .name = "NodeGrandchild",
-          .parent = node2
-      });
-      ecs_set(world, node4, Transform3D, {
-          .position = (Vector3){1.0f, 0.0f, 1.0f},
-          .rotation = QuaternionIdentity(),
-          .scale = (Vector3){0.5f, 0.5f, 0.5f},
-          .localMatrix = MatrixIdentity(),
-          .worldMatrix = MatrixIdentity()
-      });
-      ecs_set(world, node4, ModelComponent, {&cube});
-      // printf("Node4 entity ID: %llu (%s)\n", (unsigned long long)node4, ecs_get_name(world, node4));
-      // printf("- Node4 valid: %d, has Transform3D: %d, parent: %s\n",
-      //        ecs_is_valid(world, node4), ecs_has(world, node4, Transform3D),
-      //        ecs_get_name(world, ecs_get_parent(world, node4)));
-
+    ecs_set(world, node1, Transform3D, {
+        .position = (Vector3){0.0f, 0.0f, 0.0f},
+        .rotation = QuaternionIdentity(),
+        .scale = (Vector3){1.0f, 1.0f, 1.0f},
+        .localMatrix = MatrixIdentity(),
+        .worldMatrix = MatrixIdentity(),
+        .isDirty = true
+    });
+    ecs_set(world, node1, ModelComponent, {&cube});
+    // printf("Node1 entity ID: %llu (%s)\n", (unsigned long long)node1, ecs_get_name(world, node1));
+    // printf("- Node1 valid: %d, has Transform3D: %d\n", ecs_is_valid(world, node1), ecs_has(world, node1, Transform3D));
     
+    ecs_entity_t node2 = ecs_entity(world, {
+        .name = "NodeChild",
+        .parent = node1
+    });
+    ecs_set(world, node2, Transform3D, {
+        .position = (Vector3){2.0f, 0.0f, 0.0f},
+        .rotation = QuaternionIdentity(),
+        .scale = (Vector3){0.5f, 0.5f, 0.5f},
+        .localMatrix = MatrixIdentity(),
+        .worldMatrix = MatrixIdentity(),
+        .isDirty = true
+    });
+    ecs_set(world, node2, ModelComponent, {&cube});
+    // printf("Node2 entity ID: %llu (%s)\n", (unsigned long long)node2, ecs_get_name(world, node2));
+    // printf("- Node2 valid: %d, has Transform3D: %d, parent: %s\n",
+    //        ecs_is_valid(world, node2), ecs_has(world, node2, Transform3D),
+    //        ecs_get_name(world, ecs_get_parent(world, node2)));
+    
+    ecs_entity_t node3 = ecs_entity(world, {
+        .name = "Node3",
+        .parent = node1
+    });
+    ecs_set(world, node3, Transform3D, {
+        .position = (Vector3){2.0f, 0.0f, 2.0f},
+        .rotation = QuaternionIdentity(),
+        .scale = (Vector3){0.5f, 0.5f, 0.5f},
+        .localMatrix = MatrixIdentity(),
+        .worldMatrix = MatrixIdentity(),
+        .isDirty = true
+    });
+    ecs_set(world, node3, ModelComponent, {&cube});
+    // printf("Node3 entity ID: %llu (%s)\n", (unsigned long long)node3, ecs_get_name(world, node3));
+    // printf("- Node3 valid: %d, has Transform3D: %d, parent: %s\n",
+    //      ecs_is_valid(world, node3), ecs_has(world, node3, Transform3D),
+    //      ecs_get_name(world, ecs_get_parent(world, node3)));
+
+
+    ecs_entity_t node4 = ecs_entity(world, {
+        .name = "NodeGrandchild",
+        .parent = node2
+    });
+    ecs_set(world, node4, Transform3D, {
+        .position = (Vector3){1.0f, 0.0f, 1.0f},
+        .rotation = QuaternionIdentity(),
+        .scale = (Vector3){0.5f, 0.5f, 0.5f},
+        .localMatrix = MatrixIdentity(),
+        .worldMatrix = MatrixIdentity(),
+        .isDirty = true
+    });
+    ecs_set(world, node4, ModelComponent, {&cube});
+    // printf("Node4 entity ID: %llu (%s)\n", (unsigned long long)node4, ecs_get_name(world, node4));
+    // printf("- Node4 valid: %d, has Transform3D: %d, parent: %s\n",
+    //        ecs_is_valid(world, node4), ecs_has(world, node4, Transform3D),
+    //        ecs_get_name(world, ecs_get_parent(world, node4)));
 
     while (!WindowShouldClose()) {
       ecs_progress(world, 0);

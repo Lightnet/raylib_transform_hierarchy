@@ -3,6 +3,8 @@
 // once the child is part with the parent it will not count as entity in query.
 // add another transform3d. It count as long it not attach to parent.
 // more then two child is not working.
+
+#include <stdio.h>
 #include "raylib.h"
 #include "raymath.h"
 #include "flecs.h"

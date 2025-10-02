@@ -25,12 +25,12 @@ CPMAddPackage(
 )
 
 # raygui
-# CPMAddPackage(
-#     NAME raygui
-#     GITHUB_REPOSITORY raysan5/raygui
-#     GIT_TAG 4.0
-#     DOWNLOAD_ONLY YES
-# )
+CPMAddPackage(
+    NAME raygui
+    GITHUB_REPOSITORY raysan5/raygui
+    GIT_TAG 4.0
+    DOWNLOAD_ONLY YES
+)
 
 # flecs
 CPMAddPackage(
@@ -113,7 +113,7 @@ endif()
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/include
     ${raylib_SOURCE_DIR}/src
-    # ${raygui_SOURCE_DIR}/src
+    ${raygui_SOURCE_DIR}/src
     ${flecs_SOURCE_DIR}/include
     # ${mimalloc_SOURCE_DIR}/include
 )

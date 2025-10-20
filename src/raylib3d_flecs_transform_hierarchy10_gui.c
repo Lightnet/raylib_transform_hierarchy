@@ -176,10 +176,10 @@ void RenderBeginSystem(ecs_iter_t *it) {
 
 // Render begin system
 void BeginCamera3DSystem(ecs_iter_t *it) {
-  // printf("BeginCamera3DSystem\n");
-  Camera3D *camera = (Camera3D *)ecs_get_ctx(it->world);
-  if (!camera) return;
-  BeginMode3D(*camera);
+    // printf("BeginCamera3DSystem\n");
+    main_context_t *main_context = ecs_field(it, main_context_t, 0); // Singleton
+    if (!main_context) return;
+    BeginMode3D(main_context->camera);
 }
 
 // Camera3d system for 3d model
@@ -226,10 +226,10 @@ void Camera3DSystem(ecs_iter_t *it) {
 }
 
 void EndCamera3DSystem(ecs_iter_t *it) {
-  //printf("EndCamera3DSystem\n");
-  Camera3D *camera = (Camera3D *)ecs_get_ctx(it->world);
-  if (!camera) return;
-  EndMode3D();
+    //printf("EndCamera3DSystem\n");
+    main_context_t *main_context = ecs_field(it, main_context_t, 0); // Singleton
+    if (!main_context) return;
+    EndMode3D();
 }
 
 // Render end system
@@ -240,17 +240,18 @@ void EndRenderSystem(ecs_iter_t *it) {
 
 // Input handling system
 void user_input_system(ecs_iter_t *it) {
-    player_input_t *pi_ctx = ecs_singleton_ensure(it->world, player_input_t);
-    if (!pi_ctx) return;
 
-    Transform3D *t = ecs_field(it, Transform3D, 0);
+    player_input_t *pi_ctx = ecs_field(it, player_input_t, 0);
+    transform_3d_gui_t *transform_3d_gui = ecs_field(it, transform_3d_gui_t, 1);
+    Transform3D *t = ecs_field(it, Transform3D, 2);
     float dt = GetFrameTime();
     //test user input
     for (int i = 0; i < it->count; i++) {
       const char *name = ecs_get_name(it->world, it->entities[i]);
       if (name) {
         bool isFound = false;
-        if (strcmp(name, "NodeParent") == 0) {
+        // if (strcmp(name, "NodeParent") == 0) {
+        if (it->entities[i] == transform_3d_gui->id) {
 
           bool wasModified = false;
 
@@ -381,25 +382,25 @@ int main(void) {
     ecs_add_pair(world, RenderPhase, EcsDependsOn, EndCamera3DPhase); // 2D only
     ecs_add_pair(world, EndRenderPhase, EcsDependsOn, RenderPhase); // render to screen
 
+    // user input 
     ecs_system(world, {
         .entity = ecs_entity(world, { .name = "user_input_system", .add = ecs_ids(ecs_dependson(LogicUpdatePhase)) }),
         .query.terms = {
+            { .id = ecs_id(player_input_t), .src.id = ecs_id(player_input_t) }, // Singleton
+            { .id = ecs_id(transform_3d_gui_t), .src.id = ecs_id(transform_3d_gui_t) }, // Singleton
             { .id = ecs_id(Transform3D), .src.id = EcsSelf },
         },
         .callback = user_input_system
     });
-
+    // 
     ecs_system(world, {
       .entity = ecs_entity(world, { .name = "render2d_hud_system", .add = ecs_ids(ecs_dependson(RenderPhase)) }),
       .query.terms = {
         { .id = ecs_id(player_input_t), .src.id = ecs_id(player_input_t) } // Singleton
-        // { .id = ecs_id(Transform3D) },
-        //   { .id = ecs_id(Transform3D), .src.id = EcsSelf },
-        //   { .id = ecs_pair(EcsChildOf, EcsWildcard), .oper = EcsNot }
       },
       .callback = render2d_hud_system
     });
-
+    // 
     ecs_system(world, {
         .entity = ecs_entity(world, {
             .name = "UpdateTransform3DSystem",
@@ -410,24 +411,26 @@ int main(void) {
         },
         .callback = UpdateTransform3DSystem
     });
-
-
+    // 
     ecs_system(world,{
       .entity = ecs_entity(world, { .name = "RenderBeginSystem", 
         .add = ecs_ids(ecs_dependson(BeginRenderPhase)) 
       }),
       .callback = RenderBeginSystem
     });
-
     //note this has be in order of the ECS since push into array. From I guess.
+    // begin camera 3d
     ecs_system(world, {
-      .entity = ecs_entity(world, {
-        .name = "BeginCamera3DSystem", 
-        .add = ecs_ids(ecs_dependson(BeginCamera3DPhase)) 
-      }),
-      .callback = BeginCamera3DSystem
+        .entity = ecs_entity(world, {
+            .name = "BeginCamera3DSystem", 
+            .add = ecs_ids(ecs_dependson(BeginCamera3DPhase)) 
+        }),
+        .query.terms = {
+            { .id = ecs_id(main_context_t), .src.id = ecs_id(main_context_t) } // Singleton
+        },
+        .callback = BeginCamera3DSystem
     });
-
+    // render 3d mesh
     ecs_system(world, {
         .entity = ecs_entity(world, {
           .name = "Camera3DSystem", 
@@ -439,15 +442,18 @@ int main(void) {
         },
         .callback = Camera3DSystem
     });
-
+    // end camera 3d
     ecs_system(world, {
-      .entity = ecs_entity(world, {
-        .name = "EndCamera3DSystem", 
-        .add = ecs_ids(ecs_dependson(EndCamera3DPhase))
-      }),
-      .callback = EndCamera3DSystem
+        .entity = ecs_entity(world, {
+            .name = "EndCamera3DSystem", 
+            .add = ecs_ids(ecs_dependson(EndCamera3DPhase))
+        }),
+        .query.terms = {
+            { .id = ecs_id(main_context_t), .src.id = ecs_id(main_context_t) } // Singleton
+        },
+        .callback = EndCamera3DSystem
     });
-
+    // 
     ecs_system(world, {
         .entity = ecs_entity(world, {
           .name = "EndRenderSystem", 
@@ -455,10 +461,7 @@ int main(void) {
         }),
         .callback = EndRenderSystem
     });
-
     // Register GUI list system in the 2D rendering phase
-    // ECS_SYSTEM(world, transform_3D_gui_list_system, EcsOnUpdate, transform_3d_gui_t);
-
     ecs_system(world, {
         .entity = ecs_entity(world, { .name = "transform_3D_gui_list_system", .add = ecs_ids(ecs_dependson(LogicUpdatePhase)) }),
         .query.terms = {
@@ -466,7 +469,7 @@ int main(void) {
         },
         .callback = transform_3D_gui_list_system
     });
-
+    // camera
     Camera3D camera = {
         .position = (Vector3){10.0f, 10.0f, 10.0f},
         .target = (Vector3){0.0f, 0.0f, 0.0f},
@@ -474,13 +477,10 @@ int main(void) {
         .fovy = 45.0f,
         .projection = CAMERA_PERSPECTIVE
     };
-    ecs_set_ctx(world, &camera, NULL);
-
     ecs_singleton_set(world, main_context_t, {
         .camera = camera
     });
-
-
+    // player input
     ecs_singleton_set(world, player_input_t, {
       .isMovementMode=true,
       .tabPressed=false
@@ -559,6 +559,19 @@ int main(void) {
     //        ecs_is_valid(world, node4), ecs_has(world, node4, Transform3D),
     //        ecs_get_name(world, ecs_get_parent(world, node4)));
 
+    ecs_entity_t node5 = ecs_entity(world, {
+        .name = "Node5"
+    });
+    ecs_set(world, node5, Transform3D, {
+        .position = (Vector3){1.0f, 0.0f, 1.0f},
+        .rotation = QuaternionIdentity(),
+        .scale = (Vector3){0.5f, 0.5f, 0.5f},
+        .localMatrix = MatrixIdentity(),
+        .worldMatrix = MatrixIdentity(),
+        .isDirty = true
+    });
+    ecs_set(world, node5, model_component_t, {&cube});
+
     ecs_singleton_set(world, transform_3d_gui_t, {
         .id = node1  // Reference the id entity
     });
@@ -617,7 +630,6 @@ void transform_3D_gui_list_system(ecs_iter_t *it) {
     Rectangle list_rect = {520, 10, 240, 200}; // Reduced height for more controls
     int scroll_index = 0;
     
-    int prev_selected_index = gui->selectedIndex;
     GuiListView(list_rect, name_list, &scroll_index, &gui->selectedIndex);
 
     // Draw transform controls if an entity is selected

@@ -5,12 +5,12 @@
 
 // Define components (unchanged)
 typedef struct {
-    Vector2 local_pos;    // Local position relative to parent
-    Vector2 world_pos;    // Computed world position
-    Vector2 local_scale;  // Local scale relative to parent
-    float local_rotation; // Local rotation in degrees
-    float world_rotation; // Computed world rotation in degrees
-    bool isDirty;        // Flag to indicate if transform needs updating
+    Vector2 local_pos;   // Local position relative to parent
+    Vector2 local_scale; // Local scale relative to parent
+    float rotation;      // Local rotation in degrees
+    Matrix local_matrix; // Local transformation matrix
+    Matrix world_matrix; // Computed world transformation matrix
+    bool isDirty;       // Flag to indicate if transform needs updating
 } transform_2d_t;
 ECS_COMPONENT_DECLARE(transform_2d_t);
 
@@ -19,18 +19,6 @@ typedef struct {
     float radius;        // Radius of the circle
 } circle_t;
 ECS_COMPONENT_DECLARE(circle_t);
-
-
-// Helper function to rotate a Vector2 around the origin by an angle (in degrees)
-Vector2 RotateVector2(Vector2 v, float degrees) {
-    float radians = DEG2RAD * degrees;
-    float cos_r = cosf(radians);
-    float sin_r = sinf(radians);
-    return (Vector2){
-        v.x * cos_r - v.y * sin_r,
-        v.x * sin_r + v.y * cos_r
-    };
-}
 
 // Helper function to update a single transform
 void UpdateTransform2D(ecs_world_t *world, ecs_entity_t entity, transform_2d_t *transform) {
@@ -49,35 +37,37 @@ void UpdateTransform2D(ecs_world_t *world, ecs_entity_t entity, transform_2d_t *
         return;
     }
 
-    // Compute world transform
+    // Compute local transformation matrix (scale -> rotation -> translation)
+    Matrix scale = MatrixScale(transform->local_scale.x, transform->local_scale.y, 1);
+    Matrix rotation = MatrixRotate((Vector3){0, 0, 1}, DEG2RAD * transform->rotation);
+    Matrix translation = MatrixTranslate(transform->local_pos.x, transform->local_pos.y, 0);
+    transform->local_matrix = MatrixMultiply(MatrixMultiply(scale, rotation), translation);
+
+    // Compute world matrix
     if (!parent || !ecs_is_valid(world, parent)) {
-        // Root entity: world = local
-        transform->world_pos = transform->local_pos;
-        transform->world_rotation = transform->local_rotation;
+        // Root entity: world matrix = local matrix
+        transform->world_matrix = transform->local_matrix;
     } else {
-        // Child entity: compute world position and rotation
+        // Child entity: world matrix = local matrix * parent world matrix
         const transform_2d_t *parent_transform = ecs_get(world, parent, transform_2d_t);
         if (!parent_transform) {
-            transform->world_pos = transform->local_pos;
-            transform->world_rotation = transform->local_rotation;
+            transform->world_matrix = transform->local_matrix;
             return;
         }
 
-        // Validate parent world position
-        if (fabs(parent_transform->world_pos.x) > 1e6 || fabs(parent_transform->world_pos.y) > 1e6) {
-            transform->world_pos = transform->local_pos;
-            transform->world_rotation = transform->local_rotation;
+        // Validate parent world matrix (prevent extreme values)
+        float px = parent_transform->world_matrix.m12;
+        float py = parent_transform->world_matrix.m13;
+        if (fabs(px) > 1e6 || fabs(py) > 1e6) {
+            transform->world_matrix = transform->local_matrix;
             return;
         }
 
-        // Rotate local_pos around origin by parent's world_rotation, then translate by parent's world_pos
-        transform->world_pos = RotateVector2(transform->local_pos, parent_transform->world_rotation);
-        transform->world_pos = Vector2Add(transform->world_pos, parent_transform->world_pos);
-        // Combine rotations
-        transform->world_rotation = transform->local_rotation + parent_transform->world_rotation;
+        // Compute world matrix (local_matrix * parent.world_matrix for 2D hierarchy)
+        transform->world_matrix = MatrixMultiply(transform->local_matrix, parent_transform->world_matrix);
     }
 
-    // Mark children as dirty
+    // Mark children as dirty to ensure they update
     ecs_iter_t it = ecs_children(world, entity);
     while (ecs_children_next(&it)) {
         for (int i = 0; i < it.count; i++) {
@@ -89,7 +79,7 @@ void UpdateTransform2D(ecs_world_t *world, ecs_entity_t entity, transform_2d_t *
         }
     }
 
-    // Reset isDirty
+    // Reset isDirty after updating
     transform->isDirty = false;
 }
 
@@ -98,9 +88,11 @@ void UpdateChildTransform2DOnly(ecs_world_t *world, ecs_entity_t entity) {
     transform_2d_t *transform = ecs_get_mut(world, entity, transform_2d_t);
     if (!transform) return;
 
+    // Update the entity's transform
     UpdateTransform2D(world, entity, transform);
     ecs_modified(world, entity, transform_2d_t);
 
+    // Recursively update descendants
     ecs_iter_t it = ecs_children(world, entity);
     while (ecs_children_next(&it)) {
         for (int i = 0; i < it.count; i++) {
@@ -113,7 +105,7 @@ void UpdateChildTransform2DOnly(ecs_world_t *world, ecs_entity_t entity) {
 void ChildTransformSystem(ecs_iter_t *it) {
     transform_2d_t *transforms = ecs_field(it, transform_2d_t, 0);
 
-    // Update root entity's transform
+    // Update root entity's transform (dynamic updates for parent)
     for (int i = 0; i < it->count; i++) {
         ecs_entity_t current_transform = it->entities[i];
         if (!ecs_is_valid(it->world, current_transform)) {
@@ -122,10 +114,12 @@ void ChildTransformSystem(ecs_iter_t *it) {
 
         transform_2d_t *transform = &transforms[i];
         if (!ecs_get_parent(it->world, current_transform)) {
-            transform->local_rotation = 60.0f * GetTime(); // Rotate at 60 degrees per second
-            transform->local_pos.x = 400 + 100 * sinf((float)GetTime()); // Oscillate horizontally
-            transform->local_pos.y = 300;
-            transform->isDirty = true;
+            // Root entity (parent) gets dynamic updates
+            transform->rotation = 60.0f * GetTime(); // Rotate at 60 degrees per second
+            // transform->local_pos.x = 400 + 100 * sinf((float)GetTime()); // Oscillate horizontally
+            transform->local_pos.x = 400;
+            transform->local_pos.y = 300; // Fixed Y position
+            transform->isDirty = true; // Mark as dirty to trigger update
         }
     }
 
@@ -139,23 +133,26 @@ void ChildTransformSystem(ecs_iter_t *it) {
     }
 }
 
+
 // Render systems (unchanged)
 void RenderBeginSystem(ecs_iter_t *it) {
     BeginDrawing();
     ClearBackground(RAYWHITE);
 }
 
-
 void RenderObjectsSystem(ecs_iter_t *it) {
     transform_2d_t *t = ecs_field(it, transform_2d_t, 0);
     circle_t *r = ecs_field(it, circle_t, 1);
 
     for (int i = 0; i < it->count; i++) {
-        // Use world position and rotation directly
-        Vector2 world_pos = t[i].world_pos;
-        float world_rotation = t[i].world_rotation;
-        float scale_x = t[i].local_scale.x; // Use local scale (world scale could be computed if needed)
-
+        // Extract world position from world_matrix
+        Vector2 world_pos = { t[i].world_matrix.m12, t[i].world_matrix.m13 };
+        // Extract rotation from world_matrix (in radians, convert to degrees)
+        // Use -m4 to correct the rotation direction
+        float world_rotation = atan2f(-t[i].world_matrix.m4, t[i].world_matrix.m0) * RAD2DEG;
+        // Extract scale from world_matrix
+        float scale_x = sqrtf(t[i].world_matrix.m0 * t[i].world_matrix.m0 + t[i].world_matrix.m1 * t[i].world_matrix.m1);
+        
         // Draw circle with scaled radius
         DrawCircleV(world_pos, r[i].radius * scale_x, r[i].color);
         // Draw rotation indicator
@@ -165,7 +162,7 @@ void RenderObjectsSystem(ecs_iter_t *it) {
         };
         DrawLineV(world_pos, end, BLACK);
 
-        // Debug output
+        // Debug output to verify positions and rotations
         printf("Entity %llu: world_pos = (%.2f, %.2f), world_rotation = %.2f\n", 
                it->entities[i], world_pos.x, world_pos.y, world_rotation);
     }
@@ -239,11 +236,11 @@ int main() {
     ecs_entity_t parent = ecs_new(world);
     ecs_set(world, parent, transform_2d_t, {
         .local_pos = {400, 300}, 
-        .world_pos = {400, 300},
         .local_scale = {1, 1},
-        .local_rotation = 0,
-        .world_rotation = 0,
-        .isDirty = true
+        .rotation = 0,
+        .local_matrix = MatrixIdentity(),
+        .world_matrix = MatrixIdentity(),
+        .isDirty = true // Initialize as dirty to trigger initial update
     });
     ecs_set(world, parent, circle_t, {
         .color = RED, 
@@ -254,11 +251,11 @@ int main() {
     ecs_add_pair(world, child, EcsChildOf, parent);
     ecs_set(world, child, transform_2d_t, {
         .local_pos = {50, 0},
-        .world_pos = {0, 0}, // Will be computed
         .local_scale = {1, 1},
-        .local_rotation = 0,
-        .world_rotation = 0,
-        .isDirty = true
+        .rotation = 0,
+        .local_matrix = MatrixIdentity(),
+        .world_matrix = MatrixIdentity(),
+        .isDirty = true // Initialize as dirty
     });
     ecs_set(world, child, circle_t, {
         .color = BLUE,
@@ -269,11 +266,11 @@ int main() {
     ecs_add_pair(world, grandchild, EcsChildOf, child);
     ecs_set(world, grandchild, transform_2d_t, {
         .local_pos = {25, 50},
-        .world_pos = {0, 0}, // Will be computed
         .local_scale = {1, 1},
-        .local_rotation = 0,
-        .world_rotation = 0,
-        .isDirty = true
+        .rotation = 0,
+        .local_matrix = MatrixIdentity(),
+        .world_matrix = MatrixIdentity(),
+        .isDirty = true // Initialize as dirty
     });
     ecs_set(world, grandchild, circle_t, {
         .color = GREEN,
@@ -281,16 +278,16 @@ int main() {
     });
 
 
-    // Initial positions (for debugging)
+    // Initial positions (for debugging, unchanged)
     const transform_2d_t *parent_t = ecs_get(world, parent, transform_2d_t);
     const transform_2d_t *child_t = ecs_get(world, child, transform_2d_t);
     const transform_2d_t *grandchild_t = ecs_get(world, grandchild, transform_2d_t);
-    printf("Initial Parent (ID %llu): local_pos = (%.2f, %.2f), rotation = %.2f\n", 
-           parent, parent_t->local_pos.x, parent_t->local_pos.y, parent_t->local_rotation);
-    printf("Initial Child (ID %llu): local_pos = (%.2f, %.2f), rotation = %.2f\n", 
-           child, child_t->local_pos.x, child_t->local_pos.y, child_t->local_rotation);
-    printf("Initial Grandchild (ID %llu): local_pos = (%.2f, %.2f), rotation = %.2f\n", 
-           grandchild, grandchild_t->local_pos.x, grandchild_t->local_pos.y, grandchild_t->local_rotation);
+    printf("Initial Parent (ID %llu): local_pos = (%f, %f), rotation = %f\n", 
+           parent, parent_t->local_pos.x, parent_t->local_pos.y, parent_t->rotation);
+    printf("Initial Child (ID %llu): local_pos = (%f, %f), rotation = %f\n", 
+           child, child_t->local_pos.x, child_t->local_pos.y, child_t->rotation);
+    printf("Initial Grandchild (ID %llu): local_pos = (%f, %f), rotation = %f\n", 
+           grandchild, grandchild_t->local_pos.x, grandchild_t->local_pos.y, grandchild_t->rotation);
 
     while (!WindowShouldClose()) {
         ecs_progress(world, GetFrameTime());

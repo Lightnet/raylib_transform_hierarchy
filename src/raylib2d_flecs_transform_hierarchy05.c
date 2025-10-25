@@ -2,6 +2,7 @@
 #include "raymath.h"
 #include "flecs.h"
 #include <stdio.h>
+#include "raygui.h"
 
 // Define components (unchanged)
 typedef struct {
@@ -20,6 +21,20 @@ typedef struct {
 } circle_t;
 ECS_COMPONENT_DECLARE(circle_t);
 
+typedef struct {
+    ecs_entity_t id;
+} transform_2d_select_t;
+ECS_COMPONENT_DECLARE(transform_2d_select_t);
+
+float NormalizeAngle(float degrees) {
+    degrees = fmodf(degrees, 360.0f);
+    if (degrees > 180.0f) {
+        degrees -= 360.0f;
+    } else if (degrees < -180.0f) {
+        degrees += 360.0f;
+    }
+    return degrees;
+}
 
 // Helper function to rotate a Vector2 around the origin by an angle (in degrees)
 Vector2 RotateVector2(Vector2 v, float degrees) {
@@ -53,28 +68,28 @@ void UpdateTransform2D(ecs_world_t *world, ecs_entity_t entity, transform_2d_t *
     if (!parent || !ecs_is_valid(world, parent)) {
         // Root entity: world = local
         transform->world_pos = transform->local_pos;
-        transform->world_rotation = transform->local_rotation;
+        transform->world_rotation = NormalizeAngle(transform->local_rotation); // Normalize
     } else {
         // Child entity: compute world position and rotation
         const transform_2d_t *parent_transform = ecs_get(world, parent, transform_2d_t);
         if (!parent_transform) {
             transform->world_pos = transform->local_pos;
-            transform->world_rotation = transform->local_rotation;
+            transform->world_rotation = NormalizeAngle(transform->local_rotation); // Normalize
             return;
         }
 
         // Validate parent world position
         if (fabs(parent_transform->world_pos.x) > 1e6 || fabs(parent_transform->world_pos.y) > 1e6) {
             transform->world_pos = transform->local_pos;
-            transform->world_rotation = transform->local_rotation;
+            transform->world_rotation = NormalizeAngle(transform->local_rotation); // Normalize
             return;
         }
 
         // Rotate local_pos around origin by parent's world_rotation, then translate by parent's world_pos
         transform->world_pos = RotateVector2(transform->local_pos, parent_transform->world_rotation);
         transform->world_pos = Vector2Add(transform->world_pos, parent_transform->world_pos);
-        // Combine rotations
-        transform->world_rotation = transform->local_rotation + parent_transform->world_rotation;
+        // Combine rotations and normalize
+        transform->world_rotation = NormalizeAngle(transform->local_rotation + parent_transform->world_rotation);
     }
 
     // Mark children as dirty
@@ -92,6 +107,7 @@ void UpdateTransform2D(ecs_world_t *world, ecs_entity_t entity, transform_2d_t *
     // Reset isDirty
     transform->isDirty = false;
 }
+
 
 // Function to update a single entity and its descendants
 void UpdateChildTransform2DOnly(ecs_world_t *world, ecs_entity_t entity) {
@@ -122,7 +138,8 @@ void ChildTransformSystem(ecs_iter_t *it) {
 
         transform_2d_t *transform = &transforms[i];
         if (!ecs_get_parent(it->world, current_transform)) {
-            transform->local_rotation = 60.0f * GetTime(); // Rotate at 60 degrees per second
+            // transform->local_rotation = 60.0f * GetTime(); // Rotate at 60 degrees per second
+            transform->local_rotation = NormalizeAngle(60.0f * GetTime()); // Rotate at 60 degrees per second, normalized
             transform->local_pos.x = 400 + 100 * sinf((float)GetTime()); // Oscillate horizontally
             transform->local_pos.y = 300;
             transform->isDirty = true;
@@ -145,7 +162,7 @@ void RenderBeginSystem(ecs_iter_t *it) {
     ClearBackground(RAYWHITE);
 }
 
-
+// render 2d circle
 void RenderObjectsSystem(ecs_iter_t *it) {
     transform_2d_t *t = ecs_field(it, transform_2d_t, 0);
     circle_t *r = ecs_field(it, circle_t, 1);
@@ -171,12 +188,126 @@ void RenderObjectsSystem(ecs_iter_t *it) {
     }
 }
 
-
+// end render 2d
 void RenderEndSystem(ecs_iter_t *it) {
     DrawFPS(10, 10);
     EndDrawing();
 }
 
+// 
+void render_2d_gui_list_system(ecs_iter_t *it) {
+    // Singleton
+    transform_2d_select_t *transform_2d_select = ecs_field(it, transform_2d_select_t, 0);  // Field index 0
+
+    // Create a query for all entities with transform_2d_t
+    ecs_query_t *query = ecs_query(it->world, {
+        .terms = {{ ecs_id(transform_2d_t) }}
+    });
+
+    int entity_count = 0;
+    ecs_iter_t transform_it = ecs_query_iter(it->world, query);
+    while (ecs_query_next(&transform_it)) {
+        entity_count += transform_it.count;
+    }
+
+    // Allocate buffers for entity names and IDs
+    ecs_entity_t *entity_ids = (ecs_entity_t *)RL_MALLOC(entity_count * sizeof(ecs_entity_t));
+    char **entity_names = (char **)RL_MALLOC(entity_count * sizeof(char *));
+    int index = 0;
+
+    // Populate entity names and IDs
+    transform_it = ecs_query_iter(it->world, query);
+    while (ecs_query_next(&transform_it)) {
+        for (int j = 0; j < transform_it.count; j++) {
+            const char *name = ecs_get_name(it->world, transform_it.entities[j]);
+            entity_names[index] = (char *)RL_MALLOC(256 * sizeof(char));
+            snprintf(entity_names[index], 256, "%s", name ? name : "(unnamed)");
+            entity_ids[index] = transform_it.entities[j];
+            index++;
+        }
+    }
+
+    // Create a single string for GuiListView
+    char *name_list = (char *)RL_MALLOC(entity_count * 256 * sizeof(char));
+    name_list[0] = '\0';
+    for (int j = 0; j < entity_count; j++) {
+        if (j > 0) strcat(name_list, ";");
+        strcat(name_list, entity_names[j]);
+    }
+
+    // Draw the list view on the right side
+    Rectangle list_rect = {520, 10, 240, 200};
+    static int scroll_index = 0;
+    static int selected_index = -1;
+
+    GuiGroupBox(list_rect, "Entity List");
+    GuiListView(list_rect, name_list, &scroll_index, &selected_index);
+
+    // Draw transform controls if an entity is selected
+    if (selected_index >= 0 && selected_index < entity_count && ecs_is_valid(it->world, entity_ids[selected_index])) {
+        transform_2d_select->id = entity_ids[selected_index];
+        transform_2d_t *transform = ecs_get_mut(it->world, transform_2d_select->id, transform_2d_t);
+        bool modified = false;
+
+        if (transform) {
+            Rectangle control_rect = {520, 220, 240, 240};
+            GuiGroupBox(control_rect, "Transform Controls");
+
+            // Position controls
+            GuiLabel((Rectangle){530, 230, 100, 20}, "Position");
+            float new_pos_x = transform->local_pos.x;
+            float new_pos_y = transform->local_pos.y;
+            GuiSlider((Rectangle){530, 250, 200, 20}, "X", TextFormat("%.2f", new_pos_x), &new_pos_x, -800.0f, 800.0f);
+            GuiSlider((Rectangle){530, 270, 200, 20}, "Y", TextFormat("%.2f", new_pos_y), &new_pos_y, -600.0f, 600.0f);
+            if (new_pos_x != transform->local_pos.x || new_pos_y != transform->local_pos.y) {
+                transform->local_pos.x = new_pos_x;
+                transform->local_pos.y = new_pos_y;
+                modified = true;
+            }
+
+            // Rotation controls
+            GuiLabel((Rectangle){530, 290, 100, 20}, "Rotation");
+            float new_rotation = transform->local_rotation;
+            GuiSlider((Rectangle){530, 310, 200, 20}, "Angle", TextFormat("%.2f", new_rotation), &new_rotation, -180.0f, 180.0f);
+            if (new_rotation != transform->local_rotation) {
+                // transform->local_rotation = new_rotation;
+                transform->local_rotation = NormalizeAngle(new_rotation); // Normalize
+                modified = true;
+            }
+
+            // Scale controls
+            GuiLabel((Rectangle){530, 330, 100, 20}, "Scale");
+            float new_scale_x = transform->local_scale.x;
+            float new_scale_y = transform->local_scale.y;
+            GuiSlider((Rectangle){530, 350, 200, 20}, "X", TextFormat("%.2f", new_scale_x), &new_scale_x, 0.1f, 5.0f);
+            GuiSlider((Rectangle){530, 370, 200, 20}, "Y", TextFormat("%.2f", new_scale_y), &new_scale_y, 0.1f, 5.0f);
+            if (new_scale_x != transform->local_scale.x || new_scale_y != transform->local_scale.y) {
+                transform->local_scale.x = new_scale_x;
+                transform->local_scale.y = new_scale_y;
+                modified = true;
+            }
+
+            // Mark transform and descendants as dirty if modified
+            if (modified) {
+                transform->isDirty = true;
+            }
+        }
+    }
+
+    // Clean up
+    for (int j = 0; j < entity_count; j++) {
+        RL_FREE(entity_names[j]);
+    }
+    RL_FREE(entity_names);
+    RL_FREE(entity_ids);
+    RL_FREE(name_list);
+    ecs_query_fini(query);
+}
+
+
+
+
+// main
 int main() {
     InitWindow(800, 600, "Flecs + raylib Matrix Transform Test");
     SetTargetFPS(60);
@@ -185,6 +316,7 @@ int main() {
 
     ECS_COMPONENT_DEFINE(world, transform_2d_t);
     ECS_COMPONENT_DEFINE(world, circle_t);
+    ECS_COMPONENT_DEFINE(world, transform_2d_select_t);
 
     ecs_entity_t BeginRenderPhase = ecs_new_w_id(world, EcsPhase);
     ecs_entity_t RenderPhase = ecs_new_w_id(world, EcsPhase);
@@ -235,8 +367,17 @@ int main() {
         .callback = ChildTransformSystem
     });
 
+    ecs_system(world, {
+        .entity = ecs_entity(world, { .name = "render_2d_gui_list_system", .add = ecs_ids(ecs_dependson(RenderPhase)) }),
+        .query.terms = {
+            { .id = ecs_id(transform_2d_select_t), .src.id = ecs_id(transform_2d_select_t) } // Singleton
+        },
+        .callback = render_2d_gui_list_system
+    });
+
     // Create entities
     ecs_entity_t parent = ecs_new(world);
+    ecs_set_name(world,parent,"node_parent");
     ecs_set(world, parent, transform_2d_t, {
         .local_pos = {400, 300}, 
         .world_pos = {400, 300},
@@ -250,7 +391,12 @@ int main() {
         .radius = 20 
     });
 
+    ecs_singleton_set(world, transform_2d_select_t, {
+        .id = parent
+    });
+
     ecs_entity_t child = ecs_new(world);
+    ecs_set_name(world, child, "node_child");
     ecs_add_pair(world, child, EcsChildOf, parent);
     ecs_set(world, child, transform_2d_t, {
         .local_pos = {50, 0},
@@ -266,6 +412,7 @@ int main() {
     });
 
     ecs_entity_t grandchild = ecs_new(world);
+    ecs_set_name(world, grandchild, "node_grandchild");
     ecs_add_pair(world, grandchild, EcsChildOf, child);
     ecs_set(world, grandchild, transform_2d_t, {
         .local_pos = {25, 50},
